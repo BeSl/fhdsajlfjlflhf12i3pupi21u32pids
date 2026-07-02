@@ -23,7 +23,7 @@ class LiveKitRoomScreen extends StatelessWidget {
           if (controller.error != null)
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text(controller.error!, style: const TextStyle(color: Palette.danger, fontSize: 12)),
+              child: Text(controller.error!, style: TextStyle(color: Palette.danger, fontSize: 12)),
             ),
           Expanded(
             child: Padding(

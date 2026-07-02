@@ -54,13 +54,13 @@ class ContactTile extends StatelessWidget {
                     Text(contact.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Palette.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                     const SizedBox(height: 2),
                     Text(contact.lastMessage.isEmpty ? 'No messages yet' : contact.lastMessage,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Palette.textSecondary, fontSize: 13)),
+                        style: TextStyle(color: Palette.textSecondary, fontSize: 13)),
                   ],
                 ),
               ),

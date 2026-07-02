@@ -59,7 +59,7 @@ class CallScreen extends StatelessWidget {
               if (call.error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(call.error!, style: const TextStyle(color: Palette.danger, fontSize: 12)),
+                  child: Text(call.error!, style: TextStyle(color: Palette.danger, fontSize: 12)),
                 ),
             ]),
           ),

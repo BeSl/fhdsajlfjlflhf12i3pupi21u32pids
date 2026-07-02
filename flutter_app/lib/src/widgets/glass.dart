@@ -76,7 +76,7 @@ class GlassButton extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             gradient: primary
-                ? const LinearGradient(colors: [Palette.accent, Palette.accent2])
+                ? LinearGradient(colors: [Palette.accent, Palette.accent2])
                 : null,
             color: primary ? null : Palette.glassFill,
             borderRadius: BorderRadius.circular(14),
@@ -124,10 +124,10 @@ class GlassField extends StatelessWidget {
         obscureText: obscure,
         onSubmitted: onSubmitted,
         onChanged: onChanged,
-        style: const TextStyle(color: Palette.textPrimary, fontSize: 14),
+        style: TextStyle(color: Palette.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Palette.textTertiary),
+          hintStyle: TextStyle(color: Palette.textTertiary),
           prefixIcon: icon != null ? Icon(icon, size: 18, color: Palette.textSecondary) : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -160,7 +160,7 @@ class GlassAvatar extends StatelessWidget {
           Container(
             width: size,
             height: size,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: [Palette.accent, Palette.accent2]),
             ),

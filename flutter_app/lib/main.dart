@@ -44,6 +44,16 @@ class SunriseApp extends StatefulWidget {
 
 class _SunriseAppState extends State<SunriseApp> {
   final AppState _state = AppState();
+  bool _restoring = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to resume a saved session; show a splash until we know the result.
+    _state.tryRestoreSession().whenComplete(() {
+      if (mounted) setState(() => _restoring = false);
+    });
+  }
 
   @override
   void dispose() {
@@ -56,14 +66,44 @@ class _SunriseAppState extends State<SunriseApp> {
     return MaterialApp(
       title: 'Sunrise',
       debugShowCheckedModeBanner: false,
-      theme: buildGlassTheme(),
-      home: ListenableBuilder(
-        listenable: Listenable.merge([_state, _state.call, _state.liveKit]),
-        builder: (context, _) {
-          return _state.phase == Phase.ready
-              ? HomeScreen(state: _state)
-              : LoginScreen(state: _state);
-        },
+      theme: buildGlassTheme(Brightness.light),
+      darkTheme: buildGlassTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      home: Builder(builder: (context) {
+        // Keep the brightness-aware Palette in sync with the active theme.
+        Palette.dark = Theme.of(context).brightness == Brightness.dark;
+        if (_restoring) {
+          return const _Splash();
+        }
+        return ListenableBuilder(
+          listenable: Listenable.merge([_state, _state.call, _state.liveKit]),
+          builder: (context, _) {
+            return _state.phase == Phase.ready
+                ? HomeScreen(state: _state)
+                : LoginScreen(state: _state);
+          },
+        );
+      }),
+    );
+  }
+}
+
+/// Minimal splash shown while a saved session is being restored.
+class _Splash extends StatelessWidget {
+  const _Splash();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text('☀️', style: TextStyle(fontSize: 44)),
+            SizedBox(height: 16),
+            SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ),
       ),
     );
   }

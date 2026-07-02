@@ -131,7 +131,7 @@ class MessageBubble extends StatelessWidget {
         );
         break;
       case 'AU':
-        body = Row(mainAxisSize: MainAxisSize.min, children: const [
+        body = Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.play_arrow_rounded, color: Palette.accent),
           SizedBox(width: 8),
           Text('Voice message', style: TextStyle(color: Palette.textPrimary)),
@@ -139,10 +139,10 @@ class MessageBubble extends StatelessWidget {
         break;
       case 'EX':
         body = Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.attach_file, color: Palette.textSecondary),
+          Icon(Icons.attach_file, color: Palette.textSecondary),
           const SizedBox(width: 8),
           Flexible(child: Text(data?['name'] as String? ?? 'File',
-              style: const TextStyle(color: Palette.textPrimary))),
+              style: TextStyle(color: Palette.textPrimary))),
         ]);
         break;
       case 'call':

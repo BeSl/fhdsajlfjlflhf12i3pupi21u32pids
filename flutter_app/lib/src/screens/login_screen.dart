@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: Palette.bg1,
         title: const Text('Complete SSO sign-in'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('After signing in, paste the authorization code from the redirect URL.',
+          Text('After signing in, paste the authorization code from the redirect URL.',
               style: TextStyle(color: Palette.textSecondary, fontSize: 13)),
           const SizedBox(height: 12),
           GlassField(controller: ctrl, hint: 'Authorization code'),
@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: Palette.backdrop),
+        decoration: BoxDecoration(gradient: Palette.backdrop),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 380),
@@ -89,13 +89,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Text('☀️', style: TextStyle(fontSize: 44)),
                     const SizedBox(height: 8),
-                    const Text('Sunrise',
+                    Text('Sunrise',
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Palette.textPrimary)),
                     const SizedBox(height: 4),
-                    const Text('Welcome back', style: TextStyle(color: Palette.textSecondary, fontSize: 13)),
+                    Text('Welcome back', style: TextStyle(color: Palette.textSecondary, fontSize: 13)),
                     const SizedBox(height: 20),
                     if (widget.state.error != null) ...[
-                      Text(widget.state.error!, style: const TextStyle(color: Palette.danger, fontSize: 12)),
+                      Text(widget.state.error!, style: TextStyle(color: Palette.danger, fontSize: 12)),
                       const SizedBox(height: 12),
                     ],
                     GlassField(controller: _login, hint: 'Login', icon: Icons.person_outline),
@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     GlassButton(label: 'Register New Account', expand: true, loading: _busy, onTap: _register),
                     const SizedBox(height: 12),
-                    Row(children: const [
+                    Row(children: [
                       Expanded(child: Divider(color: Palette.glassBorder)),
                       Padding(
                           padding: EdgeInsets.symmetric(horizontal: 10),

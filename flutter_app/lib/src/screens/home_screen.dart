@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           DecoratedBox(
-            decoration: const BoxDecoration(gradient: Palette.backdrop),
+            decoration: BoxDecoration(gradient: Palette.backdrop),
             child: SafeArea(
               child: wide ? _wideLayout() : _narrowLayout(),
             ),
@@ -100,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         SizedBox(width: 340, child: _sidebar()),
-        const VerticalDivider(width: 1, color: Palette.glassBorder),
+        VerticalDivider(width: 1, color: Palette.glassBorder),
         Expanded(
           child: selected == null
               ? _welcome()
@@ -140,12 +140,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(widget.state.displayName,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: Palette.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
                 IconButton(
                     onPressed: widget.state.logout,
-                    icon: const Icon(Icons.logout, color: Palette.textSecondary, size: 20)),
+                    icon: Icon(Icons.logout, color: Palette.textSecondary, size: 20)),
               ],
             ),
           ),
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _searchMode
               ? _searchResults()
               : _filtered.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text('No conversations yet',
                           style: TextStyle(color: Palette.textSecondary)))
                   : ListView.builder(
@@ -187,10 +187,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final results = widget.state.searchResults;
     final busy = widget.state.searchBusy;
     if (busy) {
-      return const Center(child: CircularProgressIndicator(color: Palette.accent));
+      return Center(child: CircularProgressIndicator(color: Palette.accent));
     }
     if (results.isEmpty) {
-      return const Center(
+      return Center(
         child: Text('No users found', style: TextStyle(color: Palette.textSecondary)),
       );
     }
@@ -202,9 +202,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return ListTile(
           leading: GlassAvatar(name: r['name'] as String, size: 36),
           title: Text(r['name'] as String,
-              style: const TextStyle(color: Palette.textPrimary, fontSize: 14)),
+              style: TextStyle(color: Palette.textPrimary, fontSize: 14)),
           subtitle: Text(r['topic'] as String,
-              style: const TextStyle(color: Palette.textTertiary, fontSize: 11)),
+              style: TextStyle(color: Palette.textTertiary, fontSize: 11)),
           onTap: () => _openSearchResult(r),
         );
       },
@@ -216,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Text('☀️', style: TextStyle(fontSize: 44)),
               SizedBox(height: 12),
               Text('Welcome to Sunrise',

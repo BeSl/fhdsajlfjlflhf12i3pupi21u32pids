@@ -94,6 +94,7 @@ class AppState extends ChangeNotifier {
       await body();
       await _loadContacts();
       await _restoreAndSubscribe();
+      await _persistSession();
       phase = Phase.ready;
     } catch (e) {
       error = e.toString();
@@ -445,6 +446,72 @@ class AppState extends ChangeNotifier {
     return File('${dir.path}/contacts.json');
   }
 
+  // --- Session persistence -----------------------------------------------
+
+  Future<File> get _sessionFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/sunrise_session.json');
+  }
+
+  Future<void> _persistSession() async {
+    final token = client.authToken;
+    if (token == null) return;
+    try {
+      final file = await _sessionFile;
+      await file.writeAsString(jsonEncode({
+        'token': token,
+        'expires': client.tokenExpires?.toIso8601String(),
+        'userId': client.userId,
+        'displayName': displayName,
+      }));
+    } catch (_) {}
+  }
+
+  Future<void> _clearSession() async {
+    try {
+      final file = await _sessionFile;
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  /// Restore a saved session on startup. Returns true if the user is logged in.
+  Future<bool> tryRestoreSession() async {
+    Map<String, dynamic>? saved;
+    try {
+      final file = await _sessionFile;
+      if (!await file.exists()) return false;
+      saved = (jsonDecode(await file.readAsString()) as Map).cast<String, dynamic>();
+    } catch (_) {
+      return false;
+    }
+    final token = saved['token'] as String?;
+    if (token == null) return false;
+    final exp = DateTime.tryParse(saved['expires'] as String? ?? '');
+    if (exp != null && exp.isBefore(DateTime.now())) {
+      await _clearSession();
+      return false;
+    }
+    phase = Phase.connecting;
+    notifyListeners();
+    try {
+      await client.connect();
+      _rewire();
+      await client.loginToken(token);
+      displayName = (saved['displayName'] as String?) ?? client.userId ?? 'You';
+      await _loadContacts();
+      await _restoreAndSubscribe();
+      await _persistSession(); // refresh the (possibly renewed) token
+      phase = Phase.ready;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      await _clearSession();
+      phase = Phase.loggedOut;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> _persistContacts() async {
     try {
       final data = contacts.map((c) => {
@@ -504,6 +571,7 @@ class AppState extends ChangeNotifier {
     messages.clear();
     contacts.clear();
     phase = Phase.loggedOut;
+    _clearSession();
     client.dispose();
     notifyListeners();
   }

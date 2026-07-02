@@ -29,10 +29,10 @@ class IncomingCallView extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(call.peerName,
-                style: const TextStyle(color: Palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: Palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text('Incoming ${call.audioOnly ? 'voice' : 'video'} call…',
-                style: const TextStyle(color: Palette.textSecondary, fontSize: 13)),
+                style: TextStyle(color: Palette.textSecondary, fontSize: 13)),
             const SizedBox(height: 26),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               _circle(Icons.call_end, call.decline, Palette.danger),

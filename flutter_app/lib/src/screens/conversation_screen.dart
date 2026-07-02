@@ -297,7 +297,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Palette.border),
         ),
-        child: Text(label, style: const TextStyle(color: Palette.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w500)),
+        child: Text(label, style: TextStyle(color: Palette.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w500)),
       ),
     );
   }
@@ -356,7 +356,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ? Center(
                   child: Text(
                       q.isEmpty ? 'No messages yet. Say hello!' : 'No matches',
-                      style: const TextStyle(color: Palette.textSecondary)))
+                      style: TextStyle(color: Palette.textSecondary)))
               : Stack(
                   children: [
                     ListView.builder(
@@ -423,7 +423,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     dense: true,
                     leading: GlassAvatar(name: c.name, size: 30),
                     title: Text(c.name,
-                        style: const TextStyle(color: Palette.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+                        style: TextStyle(color: Palette.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
                     onTap: () => _selectMention(c),
                   ))
               .toList(),
@@ -438,7 +438,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           child: Row(
             children: [
               if (widget.onBack != null)
-                IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back, color: Palette.textSecondary)),
+                IconButton(onPressed: widget.onBack, icon: Icon(Icons.arrow_back, color: Palette.textSecondary)),
               GlassAvatar(name: widget.title, size: 38),
               const SizedBox(width: 10),
               Expanded(
@@ -446,7 +446,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.title,
-                        style: const TextStyle(color: Palette.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
+                        style: TextStyle(color: Palette.textPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
                     Text(s.peerTyping ? 'typing…' : (s.peerOnline ? 'online' : 'offline'),
                         style: TextStyle(
                             color: s.peerOnline ? Palette.accent : Palette.textTertiary, fontSize: 11)),
@@ -458,13 +458,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   icon: Icon(Icons.search, color: _searchOpen ? Palette.accent : Palette.textSecondary)),
               IconButton(
                   onPressed: () => s.startCall(audioOnly: true),
-                  icon: const Icon(Icons.call, color: Palette.textSecondary)),
+                  icon: Icon(Icons.call, color: Palette.textSecondary)),
               IconButton(
                   onPressed: () => s.startCall(audioOnly: false),
-                  icon: const Icon(Icons.videocam, color: Palette.textSecondary)),
+                  icon: Icon(Icons.videocam, color: Palette.textSecondary)),
               IconButton(
                   onPressed: s.startGroupCall,
-                  icon: const Icon(Icons.groups, color: Palette.textSecondary)),
+                  icon: Icon(Icons.groups, color: Palette.textSecondary)),
             ],
           ),
         ),
@@ -477,15 +477,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
           radius: 14,
           child: Row(
             children: [
-              const Icon(Icons.search, color: Palette.textTertiary, size: 20),
+              Icon(Icons.search, color: Palette.textTertiary, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _searchCtrl,
                   autofocus: true,
                   onChanged: (v) => setState(() => _searchQuery = v),
-                  style: const TextStyle(color: Palette.textPrimary, fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: Palette.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
                     hintText: 'Search messages…',
                     hintStyle: TextStyle(color: Palette.textTertiary),
                     border: InputBorder.none,
@@ -495,10 +495,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
               if (_searchQuery.trim().isNotEmpty)
                 Text('$count',
-                    style: const TextStyle(color: Palette.textTertiary, fontSize: 12)),
+                    style: TextStyle(color: Palette.textTertiary, fontSize: 12)),
               IconButton(
                 onPressed: _toggleSearch,
-                icon: const Icon(Icons.close, color: Palette.textSecondary, size: 20),
+                icon: Icon(Icons.close, color: Palette.textSecondary, size: 20),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
@@ -515,33 +515,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
           child: _recordingVoice
               ? Row(children: [
                   const SizedBox(width: 8),
-                  const Icon(Icons.fiber_manual_record, color: Palette.danger, size: 14),
+                  Icon(Icons.fiber_manual_record, color: Palette.danger, size: 14),
                   const SizedBox(width: 8),
                   Expanded(
                       child: Text('Recording  ${_fmtElapsed(_voiceWatch.elapsed)}',
-                          style: const TextStyle(color: Palette.textSecondary))),
-                  IconButton(onPressed: _toggleVoice, icon: const Icon(Icons.send_rounded, color: Palette.accent)),
+                          style: TextStyle(color: Palette.textSecondary))),
+                  IconButton(onPressed: _toggleVoice, icon: Icon(Icons.send_rounded, color: Palette.accent)),
                 ])
               : Row(
                   children: [
-                    IconButton(onPressed: _attachImage, icon: const Icon(Icons.image_outlined, color: Palette.textSecondary)),
-                    IconButton(onPressed: _showEmojiPicker, icon: const Icon(Icons.emoji_emotions_outlined, color: Palette.textSecondary)),
+                    IconButton(onPressed: _attachImage, icon: Icon(Icons.image_outlined, color: Palette.textSecondary)),
+                    IconButton(onPressed: _showEmojiPicker, icon: Icon(Icons.emoji_emotions_outlined, color: Palette.textSecondary)),
                     Expanded(
                       child: TextField(
                         controller: _input,
                         onChanged: _onChanged,
                         onSubmitted: (_) => _send(),
-                        style: const TextStyle(color: Palette.textPrimary, fontSize: 14),
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: Palette.textPrimary, fontSize: 14),
+                        decoration: InputDecoration(
                           hintText: 'Type a message…',
                           hintStyle: TextStyle(color: Palette.textTertiary),
                           border: InputBorder.none,
                         ),
                       ),
                     ),
-                    IconButton(onPressed: _toggleVoice, icon: const Icon(Icons.mic_none, color: Palette.textSecondary)),
-                    IconButton(onPressed: _recordVideoNote, icon: const Icon(Icons.circle_outlined, color: Palette.textSecondary)),
-                    IconButton(onPressed: _send, icon: const Icon(Icons.send_rounded, color: Palette.accent)),
+                    IconButton(onPressed: _toggleVoice, icon: Icon(Icons.mic_none, color: Palette.textSecondary)),
+                    IconButton(onPressed: _recordVideoNote, icon: Icon(Icons.circle_outlined, color: Palette.textSecondary)),
+                    IconButton(onPressed: _send, icon: Icon(Icons.send_rounded, color: Palette.accent)),
                   ],
                 ),
         ),
