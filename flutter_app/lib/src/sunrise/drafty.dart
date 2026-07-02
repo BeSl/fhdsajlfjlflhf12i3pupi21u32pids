@@ -68,15 +68,26 @@ class Drafty {
   /// Content for a video-call invite (VC entity).
   static Map<String, dynamic> videoCall(bool audioOnly) => _single('VC', {'aonly': audioOnly});
 
+  /// Image entity. Provide [ref] for out-of-band uploads or [val] (base64) for
+  /// small inline images sent inband.
   static Map<String, dynamic> image({
-    required String ref,
+    String? ref,
+    String? val,
     required String mime,
     int? width,
     int? height,
     String? name,
     int? size,
   }) =>
-      _single('IM', {'mime': mime, 'ref': ref, 'width': width, 'height': height, 'name': name, 'size': size});
+      _single('IM', {
+        'mime': mime,
+        if (ref != null) 'ref': ref,
+        if (val != null) 'val': val,
+        'width': width,
+        'height': height,
+        'name': name,
+        'size': size,
+      });
 
   /// A square video (rendered as a round "video note").
   static Map<String, dynamic> videoNote({
@@ -134,12 +145,22 @@ class Drafty {
     return {'txt': text, 'fmt': fmt, 'ent': ent};
   }
 
+  /// Audio (voice) entity. Provide [ref] for out-of-band uploads or [val]
+  /// (base64) for small inline clips sent inband.
   static Map<String, dynamic> audio({
-    required String ref,
+    String? ref,
+    String? val,
     required String mime,
     int? durationMs,
     String? name,
     int? size,
   }) =>
-      _single('AU', {'mime': mime, 'ref': ref, 'duration': durationMs ?? 0, 'name': name, 'size': size});
+      _single('AU', {
+        'mime': mime,
+        if (ref != null) 'ref': ref,
+        if (val != null) 'val': val,
+        'duration': durationMs ?? 0,
+        'name': name,
+        'size': size,
+      });
 }

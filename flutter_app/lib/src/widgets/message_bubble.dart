@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +8,8 @@ import '../sunrise/drafty.dart';
 import '../sunrise/models.dart';
 import '../sunrise/sunrise_client.dart';
 import '../theme/glass_theme.dart';
+import 'video_player_screen.dart';
+import 'voice_player.dart';
 
 /// Quick reactions offered in the picker (Telegram-style set), shared with the composer.
 const List<String> kQuickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
@@ -83,11 +88,74 @@ class MessageBubble extends StatelessWidget {
     return Text.rich(TextSpan(style: style, children: spans));
   }
 
+  /// Authorized network URL for out-of-band media ({ref}), or null.
   String? _src(Map<String, dynamic>? data) {
     if (data == null) return null;
     final ref = data['ref'] as String?;
-    if (ref != null) return client.fileUrl(ref);
-    return null; // inline base64 omitted for brevity
+    if (ref != null && ref.isNotEmpty) return client.fileUrl(ref);
+    return null;
+  }
+
+  /// Decoded bytes for inline (inband) media held in data['val'] (base64), or null.
+  Uint8List? _inlineBytes(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final val = data['val'];
+    if (val is String && val.isNotEmpty) {
+      try {
+        return base64.decode(val);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// Builds an image widget from either an out-of-band ref or inline bytes.
+  Widget _imageWidget(Map<String, dynamic>? data, {double size = 240, BoxFit fit = BoxFit.cover}) {
+    final url = _src(data);
+    if (url != null) {
+      return Image.network(url, width: size, fit: fit,
+          loadingBuilder: (_, child, progress) => progress == null ? child : _placeholder('🖼'),
+          errorBuilder: (_, __, ___) => _placeholder('🖼'));
+    }
+    final bytes = _inlineBytes(data);
+    if (bytes != null) {
+      return Image.memory(bytes, width: size, fit: fit,
+          errorBuilder: (_, __, ___) => _placeholder('🖼'));
+    }
+    return _placeholder('🖼 Photo');
+  }
+
+  void _openFullscreenImage(BuildContext context, Map<String, dynamic>? data) {
+    final url = _src(data);
+    final bytes = url == null ? _inlineBytes(data) : null;
+    if (url == null && bytes == null) return;
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black,
+      pageBuilder: (ctx, _, __) => Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: url != null
+                    ? Image.network(url)
+                    : Image.memory(bytes!),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
   }
 
   @override
@@ -105,37 +173,60 @@ class MessageBubble extends StatelessWidget {
     switch (tp) {
       case 'image':
       case 'IM':
-        final url = _src(data);
-        body = url != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(url, width: 240, fit: BoxFit.cover,
-                    loadingBuilder: (_, child, progress) =>
-                        progress == null ? child : _placeholder('🖼'),
-                    errorBuilder: (_, __, ___) => _placeholder('🖼')),
-              )
-            : _placeholder('🖼 Photo');
+        body = GestureDetector(
+          onTap: () => _openFullscreenImage(context, data),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _imageWidget(data),
+          ),
+        );
         break;
       case 'VD':
         final isNote = data?['width'] != null && data?['width'] == data?['height'];
-        body = Container(
-          width: isNote ? 200 : 240,
-          height: isNote ? 200 : 150,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            shape: isNote ? BoxShape.circle : BoxShape.rectangle,
-            borderRadius: isNote ? null : BorderRadius.circular(12),
+        final videoUrl = _src(data);
+        // Preview thumbnail from the base64 preview frame, if present.
+        Uint8List? preview;
+        final pv = data?['preview'];
+        if (pv is String && pv.isNotEmpty) {
+          try {
+            preview = base64.decode(pv);
+          } catch (_) {}
+        }
+        final side = isNote ? 200.0 : 240.0;
+        body = GestureDetector(
+          onTap: videoUrl == null
+              ? null
+              : () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => VideoPlayerScreen(url: videoUrl, round: isNote))),
+          child: Container(
+            width: side,
+            height: isNote ? side : 150,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              shape: isNote ? BoxShape.circle : BoxShape.rectangle,
+              borderRadius: isNote ? null : BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Stack(
+              alignment: Alignment.center,
+              fit: StackFit.expand,
+              children: [
+                if (preview != null) Image.memory(preview, fit: BoxFit.cover),
+                const Icon(Icons.play_circle_fill, color: Colors.white70, size: 48),
+              ],
+            ),
           ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.play_circle_fill, color: Colors.white70, size: 48),
         );
         break;
       case 'AU':
-        body = Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.play_arrow_rounded, color: Palette.accent),
-          SizedBox(width: 8),
-          Text('Voice message', style: TextStyle(color: Palette.textPrimary)),
-        ]);
+        body = VoicePlayer(
+          url: _src(data),
+          bytes: _inlineBytes(data),
+          durationMs: (data?['duration'] as num?)?.toInt() ?? 0,
+          tint: isOwn ? Colors.white : Palette.accent,
+          textColor: textColor,
+        );
         break;
       case 'EX':
         body = Row(mainAxisSize: MainAxisSize.min, children: [

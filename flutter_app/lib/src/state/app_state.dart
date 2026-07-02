@@ -313,14 +313,22 @@ class AppState extends ChangeNotifier {
 
   // --- Media -------------------------------------------------------------
 
+  // Files at or below this size are sent inband (base64) instead of uploaded, so
+  // media works even where the upload endpoint/auth misbehaves. Larger files upload.
+  static const int _inbandLimit = 131072; // 128 KiB
+
   Future<void> sendImage(List<int> bytes, String name, String mime, {int? width, int? height}) async {
     await _sendMedia(() async {
+      if (bytes.length <= _inbandLimit) {
+        return Drafty.image(val: base64.encode(bytes), mime: mime, width: width, height: height, name: name, size: bytes.length);
+      }
       final ref = await client.uploadFile(bytes, name, mime);
       return Drafty.image(ref: ref, mime: mime, width: width, height: height, name: name, size: bytes.length);
     });
   }
 
   Future<void> sendVideoNote(List<int> bytes, int durationMs, {String mime = 'video/mp4', int side = 240}) async {
+    // Video notes are typically too large for inband; upload them.
     await _sendMedia(() async {
       final ref = await client.uploadFile(bytes, 'video-note.mp4', mime);
       return Drafty.videoNote(ref: ref, mime: mime, side: side, durationMs: durationMs, name: 'video-note.mp4', size: bytes.length);
@@ -329,6 +337,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> sendVoice(List<int> bytes, int durationMs, {String mime = 'audio/m4a'}) async {
     await _sendMedia(() async {
+      if (bytes.length <= _inbandLimit) {
+        return Drafty.audio(val: base64.encode(bytes), mime: mime, durationMs: durationMs, name: 'voice-message.m4a', size: bytes.length);
+      }
       final ref = await client.uploadFile(bytes, 'voice-message.m4a', mime);
       return Drafty.audio(ref: ref, mime: mime, durationMs: durationMs, name: 'voice-message.m4a', size: bytes.length);
     });
