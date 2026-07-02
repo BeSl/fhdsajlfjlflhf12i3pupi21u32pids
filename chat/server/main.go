@@ -30,6 +30,7 @@ import (
 	_ "sunrise/chat/server/auth/anon"
 	_ "sunrise/chat/server/auth/basic"
 	_ "sunrise/chat/server/auth/code"
+	_ "sunrise/chat/server/auth/oidc"
 	_ "sunrise/chat/server/auth/rest"
 	_ "sunrise/chat/server/auth/token"
 	"sunrise/chat/server/store/types"
@@ -785,6 +786,9 @@ func main() {
 		mux.Handle(config.ApiPath+"v0/file/s/", gh.CompressHandler(http.HandlerFunc(largeFileServeHTTP)))
 		logs.Info.Println("Large media handling enabled", config.Media.UseHandler)
 	}
+
+	// LiveKit access-token endpoint for SFU group calls (no-op unless LIVEKIT_* env is set).
+	mux.HandleFunc(config.ApiPath+"v0/livekit/token", livekitTokenHandler)
 
 	if staticMountPoint != "/" {
 		// Serve json-formatted 404 for all other URLs

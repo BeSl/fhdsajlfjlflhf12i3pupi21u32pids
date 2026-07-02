@@ -18,6 +18,7 @@ import LoadSpinner from '../widgets/load-spinner.jsx';
 import LogoView from './logo-view.jsx';
 import MetaMessage from '../widgets/meta-message.jsx';
 import PinnedMessages from '../widgets/pinned-messages.jsx';
+const PollComposer = React.lazy(_ => import('../widgets/poll-composer.jsx'));
 import SendMessage from '../widgets/send-message.jsx';
 const TheCardPreview = React.lazy(_ => import('../widgets/the-card-preview.jsx'));
 const VideoPreview = React.lazy(_ => import('../widgets/video-preview.jsx'));
@@ -109,6 +110,21 @@ const messages = defineMessages({
     id: 'cannot_parse_vcard',
     defaultMessage: 'Cannot parse vCard file.',
     description: 'Error message when vCard file cannot be parsed'
+  },
+  icon_title_search: {
+    id: 'icon_title_search_messages',
+    defaultMessage: 'Search messages',
+    description: 'Tooltip for the in-chat message search button'
+  },
+  search_messages_prompt: {
+    id: 'search_messages_prompt',
+    defaultMessage: 'Search messages',
+    description: 'Placeholder in the in-chat message search field'
+  },
+  search_load_earlier: {
+    id: 'search_load_earlier',
+    defaultMessage: 'Search earlier messages',
+    description: 'Tooltip for loading older history while searching'
   }
 });
 
@@ -141,6 +157,20 @@ class MessagesView extends React.Component {
     super(props);
 
     this.state = MessagesView.getDerivedStateFromProps(props, {});
+    // In-chat message search (client-side, over loaded history).
+    Object.assign(this.state, {
+      searchOpen: false,
+      searchQuery: '',
+      searchResults: [], // matching message seq ids, newest first
+      searchIndex: 0,
+      pollComposer: false // whether the poll-creation dialog is open
+    });
+
+    this.toggleSearch = this.toggleSearch.bind(this);
+    this.handleSearchChange = this.handleSearchChange.bind(this);
+    this.searchNext = this.searchNext.bind(this);
+    this.searchPrev = this.searchPrev.bind(this);
+    this.loadEarlierAndSearch = this.loadEarlierAndSearch.bind(this);
 
     this.componentSetup = this.componentSetup.bind(this);
     this.leave = this.leave.bind(this);
@@ -148,6 +178,11 @@ class MessagesView extends React.Component {
     this.retrySend = this.retrySend.bind(this);
     this.sendImageAttachment = this.sendImageAttachment.bind(this);
     this.sendVideoAttachment = this.sendVideoAttachment.bind(this);
+    this.sendVideoNote = this.sendVideoNote.bind(this);
+    this.handleToggleReaction = this.handleToggleReaction.bind(this);
+    this.handleVote = this.handleVote.bind(this);
+    this.sendPoll = this.sendPoll.bind(this);
+    this.sendSticker = this.sendSticker.bind(this);
     this.sendFileAttachment = this.sendFileAttachment.bind(this);
     this.sendAudioAttachment = this.sendAudioAttachment.bind(this);
     this.sendTheCardAttachment = this.sendTheCardAttachment.bind(this);
@@ -311,6 +346,11 @@ class MessagesView extends React.Component {
         topic.onSubsUpdated = this.handleSubsUpdated;
         topic.onPres = this.handleSubsUpdated;
         topic.onAuxUpdated = this.handleAuxUpdate;
+      }
+
+      // Reset in-chat search when switching conversations.
+      if (this.state.searchOpen || this.state.searchQuery) {
+        this.setState({searchOpen: false, searchQuery: '', searchResults: [], searchIndex: 0});
       }
     }
 
@@ -815,6 +855,16 @@ class MessagesView extends React.Component {
       // msg could be null if one or more messages were deleted.
       // Updating state to force redraw.
       this.setState({latestClearId: topic.maxClearId()});
+      return;
+    }
+
+    // Reaction and vote messages are metadata: re-render to update chips/poll results,
+    // but don't treat them as new feed messages (no scroll hijack). Acknowledge to avoid unread.
+    if (msg.head && (msg.head.react_to || msg.head.vote_to != null)) {
+      if (msg.from != this.props.myUserId) {
+        this.postReadNotification(msg.seq);
+      }
+      this.forceUpdate();
       return;
     }
 
@@ -1325,6 +1375,184 @@ class MessagesView extends React.Component {
       .catch(err => this.props.onError(err.message, 'err'));
   }
 
+  // sendVideoNote sends a round video note (кружок): a short square video recorded in-app.
+  // The recorder hands over the video blob and a JPEG preview frame (as a data URL).
+  sendVideoNote(videoBlob, previewDataUrl, params) {
+    // Convert the preview data URL into a Blob; fall back to a blank square if it's missing.
+    const previewPromise = previewDataUrl ?
+      fetch(previewDataUrl).then(r => r.blob()) :
+      new Promise(resolve => {
+        const canvas = document.createElement('canvas');
+        canvas.width = params.width;
+        canvas.height = params.height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        canvas.toBlob(resolve, 'image/jpeg', 0.7);
+      });
+
+    previewPromise
+      .then(previewBlob => this.sendVideoAttachment(null, videoBlob, previewBlob, params))
+      .catch(err => this.props.onError(err.message || err, 'err'));
+  }
+
+  // collectReactions scans the topic's messages for reaction messages (head.react_to)
+  // and aggregates them into a map: {targetSeq: {emoji: Set(userId)}}.
+  // Reaction messages are ordered by seq, so add/remove operations resolve in order.
+  collectReactions(topic) {
+    const map = {};
+    topic.messages(msg => {
+      const head = msg.head;
+      if (!head || !head.react_to || !head.react) {
+        return;
+      }
+      const target = parseInt(head.react_to);
+      if (isNaN(target)) {
+        return;
+      }
+      const emoji = head.react;
+      const from = msg.from || '';
+      if (!map[target]) {
+        map[target] = {};
+      }
+      if (!map[target][emoji]) {
+        map[target][emoji] = new Set();
+      }
+      if (head.react_op == 'remove') {
+        map[target][emoji].delete(from);
+      } else {
+        map[target][emoji].add(from);
+      }
+    });
+    return map;
+  }
+
+  // reactionsForSeq turns the aggregated set-map for one message into a display array,
+  // sorted by descending count: [{emoji, count, mine}].
+  reactionsForSeq(bySeq) {
+    if (!bySeq) {
+      return null;
+    }
+    const list = [];
+    Object.keys(bySeq).forEach(emoji => {
+      const users = bySeq[emoji];
+      if (users && users.size > 0) {
+        list.push({emoji: emoji, count: users.size, mine: users.has(this.props.myUserId)});
+      }
+    });
+    if (list.length == 0) {
+      return null;
+    }
+    list.sort((a, b) => b.count - a.count);
+    return list;
+  }
+
+  // handleToggleReaction adds or removes the current user's reaction to a message.
+  // Reactions are sent as lightweight messages carrying a head marker; they are filtered
+  // out of the visible feed and aggregated onto their target message.
+  handleToggleReaction(seq, emoji) {
+    const bySeq = this.reactionData && this.reactionData[seq];
+    const mine = !!(bySeq && bySeq[emoji] && bySeq[emoji].has(this.props.myUserId));
+    const head = {react_to: '' + seq, react: emoji, react_op: mine ? 'remove' : 'add'};
+    // Send the emoji as content so clients that don't understand reactions still show something.
+    this.props.sendMessage(emoji, undefined, undefined, head);
+  }
+
+  // --- Polls ------------------------------------------------------------
+  // Polls reuse the reaction pattern: the poll is a message with head.poll (JSON),
+  // and each vote is a lightweight message with head.vote_to/head.vote, filtered from
+  // the feed and aggregated onto the poll. One vote per user (latest wins).
+
+  // collectVotes scans for vote messages and returns {pollSeq: {userId: optionIndex}}.
+  collectVotes(topic) {
+    const map = {};
+    topic.messages(msg => {
+      const head = msg.head;
+      if (!head || head.vote_to == null || head.vote == null) {
+        return;
+      }
+      const target = parseInt(head.vote_to);
+      const opt = parseInt(head.vote);
+      if (isNaN(target) || isNaN(opt)) {
+        return;
+      }
+      if (!map[target]) {
+        map[target] = {};
+      }
+      // Latest vote wins (messages iterate in seq order).
+      map[target][msg.from || ''] = opt;
+    });
+    return map;
+  }
+
+  // pollDataForMsg builds the props for PollMessage from a poll message and the vote map.
+  pollDataForMsg(msg) {
+    let parsed;
+    try {
+      parsed = JSON.parse(msg.head.poll);
+    } catch (e) {
+      return null;
+    }
+    if (!parsed || !Array.isArray(parsed.o)) {
+      return null;
+    }
+    const byUser = (this.voteData && this.voteData[msg.seq]) || {};
+    const counts = parsed.o.map(_ => 0);
+    let total = 0;
+    let myVote = null;
+    Object.keys(byUser).forEach(uid => {
+      const opt = byUser[uid];
+      if (opt >= 0 && opt < counts.length) {
+        counts[opt]++;
+        total++;
+        if (uid == this.props.myUserId) {
+          myVote = opt;
+        }
+      }
+    });
+    return {
+      question: parsed.q || '',
+      options: parsed.o,
+      counts: counts,
+      total: total,
+      myVote: myVote,
+      canVote: this.state.isWriter
+    };
+  }
+
+  // handleVote records the current user's choice on a poll.
+  handleVote(pollSeq, optIdx) {
+    const parsed = (() => {
+      const topic = this.props.sunrise.getTopic(this.state.topic);
+      const msg = topic && (topic.latestMsgVersion(pollSeq) || topic.findMessage(pollSeq));
+      try { return JSON.parse(msg.head.poll); } catch (e) { return null; }
+    })();
+    const label = (parsed && parsed.o && parsed.o[optIdx]) ? parsed.o[optIdx] : ('' + optIdx);
+    this.props.sendMessage(label, undefined, undefined, {vote_to: '' + pollSeq, vote: '' + optIdx});
+  }
+
+  // sendSticker sends a sticker as a standalone message (glyph in content, marked
+  // with head.sticker so it renders oversized and without bubble chrome).
+  sendSticker(sticker) {
+    if (typeof sticker == 'object' && sticker.ref) {
+      // Image sticker: send as an image entity with the sticker marker.
+      this.props.sendMessage(
+        Drafty.insertImage(null, 0, {mime: sticker.mime || 'image/webp', ref: sticker.ref,
+          width: sticker.width || 256, height: sticker.height || 256, size: sticker.size || 0}),
+        undefined, undefined, {sticker: '1'});
+      return;
+    }
+    this.props.sendMessage('' + sticker, undefined, undefined, {sticker: '1'});
+  }
+
+  // sendPoll publishes a new poll message.
+  sendPoll(question, options) {
+    this.setState({pollComposer: false});
+    const poll = JSON.stringify({q: question, o: options});
+    // Send the question as content so clients without poll support still show it.
+    this.props.sendMessage(question, undefined, undefined, {poll: poll});
+  }
+
   // handleAttachImageOrVideo method is called when [Attach image or video] button is clicked: launch image or video preview.
   handleAttachImageOrVideo(file) {
     const maxExternAttachmentSize = this.props.sunrise.getServerParam('maxFileUploadSize', MAX_EXTERN_ATTACHMENT_SIZE);
@@ -1492,6 +1720,89 @@ class MessagesView extends React.Component {
     } else {
       console.error("Unresolved message ref", replyToSeq);
     }
+  }
+
+  // --- In-chat message search -------------------------------------------
+
+  toggleSearch() {
+    if (this.state.searchOpen) {
+      this.setState({searchOpen: false, searchQuery: '', searchResults: [], searchIndex: 0});
+    } else {
+      this.setState({searchOpen: true});
+    }
+  }
+
+  // Compute matches (seq ids, newest first) over the currently loaded messages.
+  computeSearchResults(trimmedLower) {
+    const topic = this.props.sunrise.getTopic(this.state.topic);
+    const results = [];
+    if (topic && trimmedLower) {
+      topic.messages(msg => {
+        if (!msg || msg.hi) {
+          return;
+        }
+        const text = (typeof msg.content == 'string') ?
+          msg.content : (Drafty.isValid(msg.content) ? Drafty.toPlainText(msg.content) : '');
+        if (text && text.toLowerCase().includes(trimmedLower)) {
+          results.push(msg.seq);
+        }
+      });
+    }
+    // Newest matches first.
+    results.reverse();
+    return results;
+  }
+
+  // Search loaded messages for the query; jumps to the newest match.
+  handleSearchChange(e) {
+    const query = e.target.value;
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      this.setState({searchQuery: query, searchResults: [], searchIndex: 0});
+      return;
+    }
+    const results = this.computeSearchResults(trimmed);
+    this.setState({searchQuery: query, searchResults: results, searchIndex: 0}, () => {
+      if (results.length > 0) {
+        this.handleQuoteClick(results[0]);
+      }
+    });
+  }
+
+  // Load an older page of history from the server, then re-run the current search
+  // so matches beyond the initially-loaded window are found too.
+  loadEarlierAndSearch() {
+    const topic = this.props.sunrise.getTopic(this.state.topic);
+    if (!topic || !topic.isSubscribed() || this.state.fetchingMessages) {
+      return;
+    }
+    this.setState({fetchingMessages: true});
+    topic.getMeta(topic.startMetaQuery().withEarlierData(MESSAGES_PAGE).build())
+      .catch(err => this.props.onError(err.message, 'err'))
+      .finally(_ => {
+        const trimmed = this.state.searchQuery.trim().toLowerCase();
+        const results = trimmed ? this.computeSearchResults(trimmed) : [];
+        this.setState({fetchingMessages: false, searchResults: results,
+          searchIndex: Math.min(this.state.searchIndex, Math.max(0, results.length - 1))});
+      });
+  }
+
+  searchNext() {
+    const {searchResults, searchIndex} = this.state;
+    if (searchResults.length == 0) {
+      return;
+    }
+    const next = (searchIndex + 1) % searchResults.length;
+    this.setState({searchIndex: next}, () => this.handleQuoteClick(searchResults[next]));
+  }
+
+  searchPrev() {
+    const {searchResults, searchIndex} = this.state;
+    if (searchResults.length == 0) {
+      return;
+    }
+    const prev = (searchIndex - 1 + searchResults.length) % searchResults.length;
+    this.setState({searchIndex: prev}, () => this.handleQuoteClick(searchResults[prev]));
   }
 
   handleUnpinMessage(seq) {
@@ -1670,11 +1981,19 @@ class MessagesView extends React.Component {
         const pinnedMessages = [];
         this.state.pins.forEach(seq => pinnedMessages.push(topic.latestMsgVersion(seq) || topic.findMessage(seq)));
 
+        // Aggregate emoji reactions and poll votes once per render.
+        this.reactionData = this.collectReactions(topic);
+        this.voteData = this.collectVotes(topic);
+
         const messageNodes = [];
         let previousFrom = null;
         let prevDate = null;
         let chatBoxClass = null;
         topic.messages((msg, prev, next, i) => {
+          // Reaction and vote messages are metadata, not part of the visible feed.
+          if (msg.head && (msg.head.react_to || msg.head.vote_to != null)) {
+            return;
+          }
           let nextFrom = next ? (next.from || 'chan') : null;
 
           let sequence = 'single';
@@ -1749,6 +2068,13 @@ class MessagesView extends React.Component {
                 userIsWriter={this.state.isWriter}
                 userIsAdmin={this.state.isAdmin}
                 pinned={this.state.pins.includes(msg.seq)}
+                reactions={this.reactionsForSeq(this.reactionData[msg.seq])}
+                onToggleReaction={this.handleToggleReaction}
+                poll={msg.head && msg.head.poll ? this.pollDataForMsg(msg) : null}
+                onVote={this.handleVote}
+                sticker={!!(msg.head && msg.head.sticker)}
+                myUserId={this.props.myUserId}
+                highlightTerm={this.state.searchOpen ? this.state.searchQuery.trim() : ''}
                 viewportWidth={this.props.viewportWidth}  // Used by `formatter`.
                 showContextMenu={this.handleShowMessageContextMenu}
                 onExpandMedia={this.handleExpandMedia}
@@ -1832,6 +2158,7 @@ class MessagesView extends React.Component {
               <SendMessage
                 sunrise={this.props.sunrise}
                 topicName={this.state.topic}
+                myUserId={this.props.myUserId}
                 noInput={!!this.props.forwardMessage}
                 disabled={!this.state.isWriter || this.state.deleted}
                 reply={this.state.reply}
@@ -1843,9 +2170,18 @@ class MessagesView extends React.Component {
                 onAttachFile={this.props.forwardMessage ? null : this.handleAttachFile}
                 onAttachImage={this.props.forwardMessage ? null : this.handleAttachImageOrVideo}
                 onAttachAudio={this.props.forwardMessage ? null : this.sendAudioAttachment}
+                onAttachVideoNote={this.props.forwardMessage ? null : this.sendVideoNote}
+                onSendSticker={this.props.forwardMessage ? null : this.sendSticker}
+                onCreatePoll={this.props.forwardMessage ? null : (_ => this.setState({pollComposer: true}))}
                 onError={this.props.onError}
                 onQuoteClick={this.handleQuoteClick}
                 onCancelReply={this.handleCancelReply} />}
+            {this.state.pollComposer ?
+              <Suspense fallback={null}>
+                <PollComposer
+                  onCreate={this.sendPoll}
+                  onCancel={_ => this.setState({pollComposer: false})} />
+              </Suspense> : null}
           </>
         );
 
@@ -1894,11 +2230,52 @@ class MessagesView extends React.Component {
                 null
               }
               <div>
+                <a href="#" onClick={e => {e.preventDefault(); this.toggleSearch();}}
+                  title={formatMessage(messages.icon_title_search)}>
+                  <i className={'material-icons' + (this.state.searchOpen ? ' primary' : '')}>search</i>
+                </a>
+              </div>
+              <div>
                 <a href="#" onClick={this.handleContextClick}>
                   <i className="material-icons">more_vert</i>
                 </a>
               </div>
             </div>
+            {this.state.searchOpen ?
+              <div id="message-search-bar">
+                <i className="material-icons gray">search</i>
+                <input type="text" autoFocus
+                  placeholder={formatMessage(messages.search_messages_prompt)}
+                  value={this.state.searchQuery}
+                  onChange={this.handleSearchChange}
+                  onKeyDown={e => {
+                    if (e.key == 'Enter') { e.preventDefault(); e.shiftKey ? this.searchPrev() : this.searchNext(); }
+                    else if (e.key == 'Escape') { e.preventDefault(); this.toggleSearch(); }
+                  }} />
+                <span className="search-count">
+                  {this.state.searchQuery.trim() ?
+                    (this.state.searchResults.length ?
+                      `${this.state.searchIndex + 1}/${this.state.searchResults.length}` : '0/0') : ''}
+                </span>
+                <a href="#" onClick={e => {e.preventDefault(); this.searchPrev();}}
+                  className={this.state.searchResults.length ? '' : 'disabled'} title="Newer">
+                  <i className="material-icons">keyboard_arrow_up</i>
+                </a>
+                <a href="#" onClick={e => {e.preventDefault(); this.searchNext();}}
+                  className={this.state.searchResults.length ? '' : 'disabled'} title="Older">
+                  <i className="material-icons">keyboard_arrow_down</i>
+                </a>
+                {this.state.searchQuery.trim() && this.state.minSeqId > 1 ?
+                  <a href="#" onClick={e => {e.preventDefault(); this.loadEarlierAndSearch();}}
+                    className={this.state.fetchingMessages ? 'disabled' : ''}
+                    title={formatMessage(messages.search_load_earlier)}>
+                    <i className="material-icons">{this.state.fetchingMessages ? 'hourglass_empty' : 'history'}</i>
+                  </a> : null}
+                <a href="#" onClick={e => {e.preventDefault(); this.toggleSearch();}} title="Close">
+                  <i className="material-icons gray">close</i>
+                </a>
+              </div>
+              : null}
             {this.props.displayMobile ?
               <>
                 {this.state.pins.length > 0 ?

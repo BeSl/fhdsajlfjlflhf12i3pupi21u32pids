@@ -6,9 +6,11 @@ import { Drafty, Sunrise, TheCard } from 'sunrise-sdk';
 
 import Attachment from './attachment.jsx';
 import LetterTile from './letter-tile.jsx';
+import MessageReactions from './message-reactions.jsx';
+import PollMessage from './poll-message.jsx';
 import ReceivedMarker from './received-marker.jsx'
 
-import { fullFormatter } from '../lib/formatters.js';
+import { fullFormatter, highlightText } from '../lib/formatters.js';
 import { sanitizeUrl } from '../lib/utils.js';
 import HashNavigation from '../lib/navigation.js';
 
@@ -31,6 +33,7 @@ class BaseChatMessage extends React.PureComponent {
     this.handleContextClick = this.handleContextClick.bind(this);
     this.handleCancelUpload = this.handleCancelUpload.bind(this);
     this.handleDraftyClick = this.handleDraftyClick.bind(this);
+    this.handleToggleReaction = this.handleToggleReaction.bind(this);
 
     this.formatterContext = {
       formatMessage: props.intl.formatMessage.bind(props.intl),
@@ -64,6 +67,14 @@ class BaseChatMessage extends React.PureComponent {
           HashNavigation.navigateTo(HashNavigation.setUrlTopic('', parts.pop() || ''));
         } catch (error) {
           console.error("Invalid URL:", error);
+        }
+        break;
+      case 'mention':
+        e.preventDefault();
+        // Open (or start) a direct chat with the mentioned user.
+        const uid = e.target.dataset.val;
+        if (uid) {
+          HashNavigation.navigateTo(HashNavigation.setUrlTopic('', uid));
         }
         break;
       case 'contact_find':
@@ -171,6 +182,12 @@ class BaseChatMessage extends React.PureComponent {
     }, menuItems);
   }
 
+  handleToggleReaction(emoji) {
+    if (this.props.onToggleReaction && this.props.userIsWriter) {
+      this.props.onToggleReaction(this.props.seq, emoji);
+    }
+  }
+
   handleProgress(ratio) {
     this.setState({progress: ratio});
   }
@@ -190,15 +207,28 @@ class BaseChatMessage extends React.PureComponent {
 
   render() {
     const sideClass = this.props.sequence + ' ' + (this.props.response ? 'left' : 'right');
-    const bubbleClass = (this.props.sequence == 'single' || this.props.sequence == 'last') ? 'bubble tip' : 'bubble';
+    let bubbleClass = (this.props.sequence == 'single' || this.props.sequence == 'last') ? 'bubble tip' : 'bubble';
+    if (this.props.sticker) {
+      // Stickers have no bubble background/tail.
+      bubbleClass = 'bubble sticker';
+    }
     const avatar = this.props.userAvatar || true;
     let textSizeClass = 'message-content';
     const fullDisplay = (this.props.isGroup && this.props.response &&
       (this.props.sequence == 'single' || this.props.sequence == 'last'));
 
+    // Keep the highlight term current for the in-chat search formatter.
+    this.formatterContext.highlight = this.props.highlightTerm || null;
+
     let content = this.props.content;
     const attachments = [];
-    if (this.props.mimeType == Drafty.getContentType() && Drafty.isValid(content)) {
+    if (this.props.poll) {
+      // Poll message: render the interactive poll widget instead of Drafty content.
+      content = <PollMessage {...this.props.poll} onVote={idx => this.props.onVote(this.props.seq, idx)} />;
+    } else if (this.props.sticker && typeof content == 'string') {
+      // Glyph sticker: render oversized; the bubble chrome is removed via CSS.
+      content = <div className="sticker-message">{content}</div>;
+    } else if (this.props.mimeType == Drafty.getContentType() && Drafty.isValid(content)) {
       Drafty.attachments(content, (att, i) => {
         if (Drafty.isFormResponseType(att.mime)) {
           // Don't show json drafty form response objects as attachments.
@@ -225,6 +255,9 @@ class BaseChatMessage extends React.PureComponent {
       if (new RegExp('^\\p{RGI_Emoji}{1,5}$', 'v').test(content || '')) {
         // Content consists of 1-5 emoji characters. Count how many and use it to increase the font size.
         textSizeClass += ' emoji-' + (content || '').match(/\p{RGI_Emoji}/vg).length;
+      } else if (this.props.highlightTerm) {
+        // Highlight the active in-chat search term in plain-text messages.
+        content = React.createElement(React.Fragment, null, highlightText([content], this.props.highlightTerm, 'hl'));
       }
     } else {
       content = <><i className="material-icons gray">warning_amber</i> <i className="gray">
@@ -265,6 +298,12 @@ class BaseChatMessage extends React.PureComponent {
                   <i className="material-icons">expand_more</i>
                 </a>
               </span> : null
+            }
+            {this.props.onToggleReaction ?
+              <MessageReactions
+                reactions={this.props.reactions}
+                canReact={this.props.userIsWriter}
+                onToggle={this.handleToggleReaction} /> : null
             }
           </div>
           {fullDisplay ?

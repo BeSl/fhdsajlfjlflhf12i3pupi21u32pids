@@ -1,6 +1,6 @@
 <script>
   import { appState } from '../lib/stores.svelte.js';
-  import { connect, createAccount, login } from '../lib/tinode.js';
+  import { connect, createAccount, login, myUID } from '../lib/tinode.js';
   import GlassPanel from '../lib/components/GlassPanel.svelte';
   import Input from '../lib/components/Input.svelte';
   import Button from '../lib/components/Button.svelte';
@@ -19,8 +19,9 @@
       await connect();
       await createAccount(loginVal, password, displayName, email || undefined);
       await login(loginVal, password);
-      appState.user = { id: '', name: displayName };
-      appState.view = 'chats';
+      appState.user = { id: myUID(), name: displayName };
+      appState.connected = true;
+      appState.view = 'app';
     } catch (e) {
       error = e?.message || 'Registration failed';
     } finally { loading = false; }
@@ -32,7 +33,7 @@
   <GlassPanel class="reg-card">
     <div class="logo">☀️</div>
     <h1 class="title">Create Account</h1>
-    <p class="subtitle">Join Sunrise</p>
+    <p class="subtitle">Join cotton Talk</p>
 
     {#if error}
       <div class="error">{error}</div>
@@ -54,7 +55,7 @@
 <style>
   .reg-page { height: 100%; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
   .bg-glow { position: absolute; width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(139,92,246,0.15), transparent 70%); top: -200px; left: -200px; pointer-events: none; }
-  .reg-card { width: 380px; display: flex; flex-direction: column; gap: 14px; padding: 32px; animation: fadeIn 400ms ease; }
+  :global(.reg-card) { width: 380px; display: flex; flex-direction: column; gap: 14px; padding: 32px; animation: fadeIn 400ms ease; }
   .logo { font-size: 48px; text-align: center; }
   .title { font-size: 24px; font-weight: 600; text-align: center; }
   .subtitle { font-size: 14px; color: var(--text-secondary); text-align: center; margin-bottom: 8px; }
